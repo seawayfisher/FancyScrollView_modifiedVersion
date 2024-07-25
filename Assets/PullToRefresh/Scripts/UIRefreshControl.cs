@@ -2,6 +2,10 @@
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using System.Collections;
+using UnityEngine.Serialization;
+
 
 /*
     MIT License
@@ -28,29 +32,65 @@ using UnityEngine.UI;
 */
 namespace PullToRefresh
 {
-    public class UIRefreshControl : MonoBehaviour
+    public enum RefreshPullDirection
+    {
+        FromTopToBottom,    // 从上往下拉
+        FromBottomToTop     // 从下往上拉
+    }
+
+    public class UIRefreshControl : UIBehaviour, IBeginDragHandler, IEndDragHandler
     {
         [Serializable] public class RefreshControlEvent : UnityEvent {}
-
+        
+        // todo ,等正式版本
+        [Header("下拉方式")]
+        [SerializeField] private RefreshPullDirection m_pullDirection = RefreshPullDirection.FromBottomToTop;
+        [Header("控制的scrollRect")]
         [SerializeField] private ScrollRect m_ScrollRect;
+        [Header("超出多少像素后松手才触发刷新")]
         [SerializeField] private float m_PullDistanceRequiredRefresh = 150f;
+        [Header("超时恢复列表正常表现,小于等于0表示,永远不恢复原状")]
+        [SerializeField] private float m_RefreshDuration = 1.5f;
+        [Header("刷新动画")]
         [SerializeField] private Animator m_LoadingAnimator;
-        [SerializeField] RefreshControlEvent m_OnRefresh = new RefreshControlEvent();
-
-
-        // private float m_InitialPosition;
+        [SerializeField] public RefreshControlEvent m_OnRefresh = new RefreshControlEvent();
+        [FormerlySerializedAs("_activityIndicatorStartLoadingName")]
+        [Header("刷新动画")]
+        [SerializeField] public string m_activityIndicatorStartLoadingName = "Loading";
+        
         private float m_Progress;
         private bool m_IsPulled;
         private bool m_IsRefreshing;
-        // private Vector2 m_PositionStop;
-        private IScrollable m_ScrollView;
 
+        private bool m_Dragging;
         /// <summary>
         /// Progress until refreshing begins. (0-1)
         /// </summary>
         public float Progress
         {
             get { return m_Progress; }
+        }
+        private void SetTimerForCloseAnim()
+        {
+            if (this.m_RefreshDuration <= 0)
+            {
+                return;
+            }
+
+            StartCoroutine(CloseRefreshAnimIfTimeOut());
+        }
+        
+        /// <summary>
+        /// 开一个协程,在超时后关闭动画
+        /// </summary>
+        /// <returns></returns>
+        private IEnumerator CloseRefreshAnimIfTimeOut()
+        {
+            // Instead of data acquisition.
+            yield return new WaitForSeconds(m_RefreshDuration);
+
+            // Call EndRefreshing() when refresh is over.
+            this.EndRefreshing();
         }
 
         /// <summary>
@@ -77,20 +117,39 @@ namespace PullToRefresh
         {
             m_IsPulled = false;
             m_IsRefreshing = false;
-            m_LoadingAnimator.SetBool(_activityIndicatorStartLoadingName, false);
+            m_LoadingAnimator.SetBool(m_activityIndicatorStartLoadingName, false);
         }
 
-        const string _activityIndicatorStartLoadingName = "Loading";
+
+        protected override void OnDisable()
+        {
+            m_Dragging = false;
+            base.OnDisable();
+        }
+        public virtual void OnBeginDrag(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left)
+                return;
+
+            if (!IsActive())
+                return;
+            m_Dragging = true;
+        }
+        public virtual void OnEndDrag(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Left)
+                return;
+
+            m_Dragging = false;
+        }
+
+        public bool GetIsDragging()
+        {
+            return m_Dragging;
+        }
 
         private void Start()
         {
-            // m_InitialPosition = GetContentAnchoredPosition();
-            // m_PositionStop = new Vector2(m_ScrollRect.content.anchoredPosition.x, m_InitialPosition - m_PullDistanceRequiredRefresh);
-            // // 写日志 m_PositionStop
-            // var y = m_ScrollRect.content.sizeDelta.y - m_ScrollRect.viewport.rect.y;
-            // m_PositionStop = new Vector2(m_ScrollRect.content.anchoredPosition.x, y);
-            // Debug.Log("m_PositionStop的值是: " + m_PositionStop);
-            m_ScrollView = m_ScrollRect.GetComponent<IScrollable>();
             m_ScrollRect.onValueChanged.AddListener(OnScroll);
         }
 
@@ -146,7 +205,7 @@ namespace PullToRefresh
                 m_IsRefreshing = false;
             }
 
-            if (m_IsPulled && m_ScrollView.Dragging)
+            if (m_IsPulled && GetIsDragging())
             {
                 return;
             }
@@ -159,17 +218,18 @@ namespace PullToRefresh
             }
 
             // Start animation when you reach the required distance while dragging.
-            if (m_ScrollView.Dragging)
+            if (GetIsDragging())
             {
                 m_IsPulled = true;
-                m_LoadingAnimator.SetBool(_activityIndicatorStartLoadingName, true);
+                m_LoadingAnimator.SetBool(m_activityIndicatorStartLoadingName, true);
             }
 
             // ドラッグした状態で必要距離に達したあとに、指を離したらリフレッシュ開始
-            if (m_IsPulled && !m_ScrollView.Dragging)
+            if (m_IsPulled && !GetIsDragging())
             {
                 m_IsRefreshing = true;
                 m_OnRefresh.Invoke();
+                SetTimerForCloseAnim();
             }
 
             m_Progress = 0f;
@@ -182,5 +242,6 @@ namespace PullToRefresh
                       $"content_size={m_ScrollRect.content.sizeDelta}, viewPort_size={m_ScrollRect.viewport.rect.size}" );
             return m_ScrollRect.content.anchoredPosition.y;
         }
+        
     }
 }

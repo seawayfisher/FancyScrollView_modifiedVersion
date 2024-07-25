@@ -10,7 +10,7 @@ public class ExampleScene : MonoBehaviour
     {
         // Register callback
         // This registration is possible even from Inspector.
-        m_UIRefreshControl.OnRefresh.AddListener(RefreshItems);
+        // m_UIRefreshControl.OnRefresh.AddListener(RefreshItems);
     }
 
     private void RefreshItems()

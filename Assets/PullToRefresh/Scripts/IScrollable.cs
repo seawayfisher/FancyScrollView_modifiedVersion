@@ -25,8 +25,8 @@
 namespace PullToRefresh
 {
     // implement in your ScrollView
-    public interface IScrollable
-    {
-        bool Dragging { get; }
-    }
+    // public interface IScrollable
+    // {
+    //     bool Dragging { get; }
+    // }
 }
