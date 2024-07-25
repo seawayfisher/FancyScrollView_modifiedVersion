@@ -4,7 +4,9 @@ using UnityEngine.Events;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using System.Collections;
+using System.Diagnostics;
 using UnityEngine.Serialization;
+using Debug = UnityEngine.Debug;
 
 
 /*
@@ -42,8 +44,7 @@ namespace PullToRefresh
     {
         [Serializable] public class RefreshControlEvent : UnityEvent {}
         
-        // todo ,等正式版本
-        [Header("下拉方式")]
+        [Header("下拉方式")]// TODO  不支持左右刷新
         [SerializeField] private RefreshPullDirection m_pullDirection = RefreshPullDirection.FromBottomToTop;
         [Header("控制的scrollRect")]
         [SerializeField] private ScrollRect m_ScrollRect;
@@ -159,9 +160,23 @@ namespace PullToRefresh
             return result;
         }
 
+        Vector2 GetPositionStop()
+        {
+            switch (m_pullDirection)
+            {
+                case RefreshPullDirection.FromBottomToTop:
+                    return this.GetPositionStopAtBottom();
+                case RefreshPullDirection.FromTopToBottom:
+                    return new Vector2();
+            }
+
+            return new Vector2(); 
+        }
+
         Vector2 GetPositionStopAtBottom()
         {
             // return new Vector2(m_ScrollRect.content.anchoredPosition.x, m_InitialPosition - m_PullDistanceRequiredRefresh); 
+            // content的总高度减去viewport的高度,就等到content应该停靠的位置, 额外的m_PullDistanceRequiredRefresh 是为了有停靠的空间
             var y = m_ScrollRect.content.sizeDelta.y + m_ScrollRect.viewport.rect.y + m_PullDistanceRequiredRefresh;
             var m_PositionStop = new Vector2(m_ScrollRect.content.anchoredPosition.x, y);
             Debug.Log($"停靠位置 m_ScrollRect.content.sizeDelta.y={m_ScrollRect.content.sizeDelta.y}, m_ScrollRect.viewport.rect.y=${m_ScrollRect.viewport.rect.y}, m_PullDistanceRequiredRefresh={m_PullDistanceRequiredRefresh}");
@@ -180,7 +195,23 @@ namespace PullToRefresh
                 return;
             }
 
-            m_ScrollRect.content.anchoredPosition = GetPositionStopAtBottom();  // 防止回弹
+            m_ScrollRect.content.anchoredPosition = GetPositionStop();  // 防止回弹
+        }
+
+        private float GetDistance()
+        {
+            var initialPosition = this.getInitialPosition();
+            var contentAnchoredPosition = this.GetContentAnchoredPosition();
+            switch (m_pullDirection)
+            {
+                case RefreshPullDirection.FromBottomToTop:
+                    var distance =  contentAnchoredPosition - initialPosition;
+                    return distance;
+                case RefreshPullDirection.FromTopToBottom:
+                    var distance2 = initialPosition - contentAnchoredPosition;
+                    return distance2;
+            }
+            return 0f;
         }
 
         private void OnScroll(Vector2 normalizedPosition)
@@ -188,7 +219,7 @@ namespace PullToRefresh
             var initialPosition = this.getInitialPosition();
             var contentAnchoredPosition = this.GetContentAnchoredPosition();
             // var distance = initialPosition - contentAnchoredPosition;
-            var distance =  contentAnchoredPosition - initialPosition;
+            var distance = GetDistance();
             Debug.Log($"OnScroll, initialPosition={initialPosition}, contentAnchoredPosition={contentAnchoredPosition}, distance={distance}");
             if (distance < 0f)
             {
@@ -242,6 +273,5 @@ namespace PullToRefresh
                       $"content_size={m_ScrollRect.content.sizeDelta}, viewPort_size={m_ScrollRect.viewport.rect.size}" );
             return m_ScrollRect.content.anchoredPosition.y;
         }
-        
     }
 }
